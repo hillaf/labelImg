@@ -12,12 +12,15 @@ except ImportError:
 from libs.utils import distance
 import sys
 
-DEFAULT_LINE_COLOR = QColor(0, 255, 0, 128)
-DEFAULT_FILL_COLOR = QColor(255, 0, 0, 128)
-DEFAULT_SELECT_LINE_COLOR = QColor(255, 255, 255)
-DEFAULT_SELECT_FILL_COLOR = QColor(0, 128, 255, 155)
-DEFAULT_VERTEX_FILL_COLOR = QColor(0, 255, 0, 255)
-DEFAULT_HVERTEX_FILL_COLOR = QColor(255, 0, 0)
+DEFAULT_LINE_COLOR = QColor(255, 0, 0, 128)
+DEFAULT_FILL_COLOR = QColor(255, 0, 0, 64)
+DEFAULT_SELECT_LINE_COLOR = QColor(255, 0, 0, 255)
+DEFAULT_SELECT_FILL_COLOR = QColor(255, 0, 0, 64)
+DEFAULT_VERTEX_FILL_COLOR = QColor(255, 0, 0, 128)
+DEFAULT_HVERTEX_FILL_COLOR = QColor(255, 0, 0, 64)
+
+FROZEN_LINE_COLOR = QColor(255, 255, 0, 128)
+FROZEN_FILL_COLOR = QColor(255, 255, 0, 64)
 
 
 class Shape(object):
@@ -33,10 +36,13 @@ class Shape(object):
     select_fill_color = DEFAULT_SELECT_FILL_COLOR
     vertex_fill_color = DEFAULT_VERTEX_FILL_COLOR
     h_vertex_fill_color = DEFAULT_HVERTEX_FILL_COLOR
+    frozen_line_color = FROZEN_LINE_COLOR
+    frozen_fill_color = FROZEN_FILL_COLOR
     point_type = P_ROUND
-    point_size = 16
+    point_size = 1
     scale = 1.0
     label_font_size = 8
+    frozen = False
 
     def __init__(self, label=None, line_color=None, difficult=False, paint_label=False):
         self.label = label
@@ -87,6 +93,7 @@ class Shape(object):
     def paint(self, painter):
         if self.points:
             color = self.select_line_color if self.selected else self.line_color
+            color = color if self.frozen is False else self.frozen_line_color
             pen = QPen(color)
             # Try using integer sizes for smoother drawing(?)
             pen.setWidth(max(1, int(round(2.0 / self.scale))))
@@ -132,6 +139,7 @@ class Shape(object):
 
             if self.fill:
                 color = self.select_fill_color if self.selected else self.fill_color
+                color = color if self.frozen is False else self.frozen_fill_color
                 painter.fillPath(line_path, color)
 
     def draw_vertex(self, path, i):

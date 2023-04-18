@@ -73,7 +73,7 @@ class WindowMixin(object):
 class MainWindow(QMainWindow, WindowMixin):
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = list(range(3))
 
-    def __init__(self, default_filename=None, default_prefdef_class_file=None, default_save_dir=None):
+    def __init__(self, default_filename=None, default_prefdef_class_file=None, default_save_dir=None, freezed_classes_file=None):
         super(MainWindow, self).__init__()
         self.setWindowTitle(__appname__)
 
@@ -92,10 +92,13 @@ class MainWindow(QMainWindow, WindowMixin):
         self.default_save_dir = default_save_dir
         self.label_file_format = settings.get(SETTING_LABEL_FILE_FORMAT, LabelFileFormat.PASCAL_VOC)
 
+        self.freezed_classes_file = freezed_classes_file
+
         # For loading all image under a directory
         self.m_img_list = []
         self.dir_name = None
         self.label_hist = []
+        self.freezed_classes = []
         self.last_open_dir = None
         self.cur_img_idx = 0
         self.img_count = len(self.m_img_list)
@@ -109,6 +112,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Load predefined classes to the list
         self.load_predefined_classes(default_prefdef_class_file)
+
+        self.load_freezed_classes(freezed_classes_file)
 
         if self.label_hist:
             self.default_label = self.label_hist[0]
@@ -507,8 +512,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.statusBar().show()
 
         self.restoreState(settings.get(SETTING_WIN_STATE, QByteArray()))
-        Shape.line_color = self.line_color = QColor(settings.get(SETTING_LINE_COLOR, DEFAULT_LINE_COLOR))
-        Shape.fill_color = self.fill_color = QColor(settings.get(SETTING_FILL_COLOR, DEFAULT_FILL_COLOR))
+        Shape.line_color = self.line_color = QColor(255, 0, 0, 128)
+        Shape.fill_color = self.fill_color = QColor(255, 0, 0, 64)
         self.canvas.set_drawing_color(self.line_color)
         # Add chris
         Shape.difficult = self.difficult
@@ -764,7 +769,6 @@ class MainWindow(QMainWindow, WindowMixin):
         text = self.label_dialog.pop_up(item.text())
         if text is not None:
             item.setText(text)
-            item.setBackground(generate_color_by_text(text))
             self.set_dirty()
             self.update_combo_box()
 
@@ -823,7 +827,6 @@ class MainWindow(QMainWindow, WindowMixin):
         item = HashableQListWidgetItem(shape.label)
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
         item.setCheckState(Qt.Checked)
-        item.setBackground(generate_color_by_text(shape.label))
         self.items_to_shapes[item] = shape
         self.shapes_to_items[shape] = item
         self.label_list.addItem(item)
@@ -857,15 +860,10 @@ class MainWindow(QMainWindow, WindowMixin):
             shape.close()
             s.append(shape)
 
-            if line_color:
-                shape.line_color = QColor(*line_color)
+            if label in self.freezed_classes:
+                shape.frozen = True
             else:
-                shape.line_color = generate_color_by_text(label)
-
-            if fill_color:
-                shape.fill_color = QColor(*fill_color)
-            else:
-                shape.fill_color = generate_color_by_text(label)
+                shape.frozen = False
 
             self.add_label(shape)
         self.update_combo_box()
@@ -955,7 +953,6 @@ class MainWindow(QMainWindow, WindowMixin):
         label = item.text()
         if label != shape.label:
             shape.label = item.text()
-            shape.line_color = generate_color_by_text(shape.label)
             self.set_dirty()
         else:  # User probably changed item visibility
             self.canvas.set_shape_visible(shape, item.checkState() == Qt.Checked)
@@ -984,8 +981,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.diffc_button.setChecked(False)
         if text is not None:
             self.prev_label_text = text
-            generate_color = generate_color_by_text(text)
-            shape = self.canvas.set_last_label(text, generate_color, generate_color)
+            shape = self.canvas.set_last_label(text)
             self.add_label(shape)
             if self.beginner():  # Switch to edit mode.
                 self.canvas.set_editing(True)
@@ -1164,6 +1160,7 @@ class MainWindow(QMainWindow, WindowMixin):
             self.add_recent_file(self.file_path)
             self.toggle_actions(True)
             self.show_bounding_box_from_annotation_file(self.file_path)
+            self.load_freezed_classes(self.freezed_classes_file)
 
             counter = self.counter_str()
             self.setWindowTitle(__appname__ + ' ' + file_path + ' ' + counter)
@@ -1622,6 +1619,19 @@ class MainWindow(QMainWindow, WindowMixin):
                     else:
                         self.label_hist.append(line)
 
+
+    def load_freezed_classes(self, freezed_classes_file):
+        if os.path.exists(freezed_classes_file) is True:
+            with codecs.open(freezed_classes_file, 'r', 'utf8') as f:
+                self.freezed_classes = []
+                for line in f:
+                    line = line.strip()
+                    if self.freezed_classes is None:
+                        self.freezed_classes = [line]
+                    else:
+                        self.freezed_classes.append(line)
+
+
     def load_pascal_xml_by_filename(self, xml_path):
         if self.file_path is None:
             return
@@ -1727,6 +1737,8 @@ def get_main_app(argv=None):
                            default=os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt"),
                            nargs="?")
     argparser.add_argument("save_dir", nargs="?")
+    argparser.add_argument("freezed_classes", default=os.path.join(os.path.dirname(__file__), "data", "freezed_classes.txt"),
+                           nargs="?")
     args = argparser.parse_args(argv[1:])
 
     args.image_dir = args.image_dir and os.path.normpath(args.image_dir)
@@ -1736,7 +1748,8 @@ def get_main_app(argv=None):
     # Usage : labelImg.py image classFile saveDir
     win = MainWindow(args.image_dir,
                      args.class_file,
-                     args.save_dir)
+                     args.save_dir,
+                     args.freezed_classes)
     win.show()
     return app, win
 

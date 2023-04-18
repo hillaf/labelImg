@@ -42,8 +42,8 @@ class Canvas(QWidget):
         self.current = None
         self.selected_shape = None  # save the selected shape here
         self.selected_shape_copy = None
-        self.drawing_line_color = QColor(0, 0, 255)
-        self.drawing_rect_color = QColor(0, 0, 255)
+        self.drawing_line_color = QColor(255, 0, 255, 200)
+        self.drawing_rect_color = QColor(255, 0, 255, 200)
         self.line = Shape(line_color=self.drawing_line_color)
         self.prev_point = QPointF()
         self.offsets = QPointF(), QPointF()
@@ -217,20 +217,7 @@ class Canvas(QWidget):
         self.setToolTip("Image")
         priority_list = self.shapes + ([self.selected_shape] if self.selected_shape else [])
         for shape in reversed([s for s in priority_list if self.isVisible(s)]):
-            # Look for a nearby vertex to highlight. If that fails,
-            # check if we happen to be inside a shape.
-            index = shape.nearest_vertex(pos, self.epsilon)
-            if index is not None:
-                if self.selected_vertex():
-                    self.h_shape.highlight_clear()
-                self.h_vertex, self.h_shape = index, shape
-                shape.highlight_vertex(index, shape.MOVE_VERTEX)
-                self.override_cursor(CURSOR_POINT)
-                self.setToolTip("Click & drag to move point")
-                self.setStatusTip(self.toolTip())
-                self.update()
-                break
-            elif shape.contains_point(pos):
+            if shape.contains_point(pos):
                 if self.selected_vertex():
                     self.h_shape.highlight_clear()
                 self.h_vertex, self.h_shape = None, shape
