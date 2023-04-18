@@ -1,3 +1,14 @@
+LabelImg fork
+=======
+
+Features added for tracking annotation comfort:
+
+- Add copyPrevBoundingNoOverwrite functionality to complement intermediate frames: copies only new bounding boxes from previous frame
+- Add frozen classes functionality for ending tracks: classes in ``data/freezed_labels.txt`` will not be copied to the next frame
+- Use indices directly as labels
+- More efficient key binds
+
+
 .. image:: /readme/images/labelimg.png
         :target: https://github.com/heartexlabs/label-studio
 
