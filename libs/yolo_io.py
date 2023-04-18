@@ -42,7 +42,8 @@ class YOLOWriter:
         if box_name not in class_list:
             class_list.append(box_name)
 
-        class_index = class_list.index(box_name)
+        #class_index = class_list.index(box_name)
+        class_index = int(box_name)
 
         return class_index, x_center, y_center, w, h
 
@@ -119,7 +120,7 @@ class YoloReader:
         self.shapes.append((label, points, None, None, difficult))
 
     def yolo_line_to_shape(self, class_index, x_center, y_center, w, h):
-        label = self.classes[int(class_index)]
+        label = str(class_index)
 
         x_min = max(float(x_center) - float(w) / 2, 0)
         x_max = min(float(x_center) + float(w) / 2, 1)

@@ -228,7 +228,13 @@ class MainWindow(QMainWindow, WindowMixin):
 
         open_annotation = action(get_str('openAnnotation'), self.open_annotation_dialog,
                                  'Ctrl+Shift+O', 'open', get_str('openAnnotationDetail'))
-        copy_prev_bounding = action(get_str('copyPrevBounding'), self.copy_previous_bounding_boxes, 'Ctrl+v', 'copy', get_str('copyPrevBounding'))
+
+        copy_prev_bounding = action(get_str('copyPrevBounding'), self.copy_previous_bounding_boxes,
+                                 'g', 'copy', get_str('copyPrevBounding'))
+
+        copy_prev_bounding_no_overwrite = action(get_str('copyPrevBoundingNoOverwrite'),
+                                 self.copy_previous_bounding_boxes_no_overwrite,
+                                 's', 'copy', get_str('copyPrevBoundingNoOverwrite'))
 
         open_next_image = action(get_str('nextImg'), self.open_next_image,
                                  'd', 'next', get_str('nextImgDetail'))
@@ -278,7 +284,7 @@ class MainWindow(QMainWindow, WindowMixin):
         create = action(get_str('crtBox'), self.create_shape,
                         'w', 'new', get_str('crtBoxDetail'), enabled=False)
         delete = action(get_str('delBox'), self.delete_selected_shape,
-                        'Delete', 'delete', get_str('delBoxDetail'), enabled=False)
+                        'r', 'delete', get_str('delBoxDetail'), enabled=False)
         copy = action(get_str('dupBox'), self.copy_selected_shape,
                       'Ctrl+D', 'copy', get_str('dupBoxDetail'),
                       enabled=False)
@@ -427,7 +433,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.display_label_option.triggered.connect(self.toggle_paint_labels_option)
 
         add_actions(self.menus.file,
-                    (open, open_dir, change_save_dir, open_annotation, copy_prev_bounding, self.menus.recentFiles, save, save_format, save_as, close, reset_all, delete_image, quit))
+                    (open, open_dir, change_save_dir, open_annotation, copy_prev_bounding, copy_prev_bounding_no_overwrite, self.menus.recentFiles, save, save_format, save_as, close, reset_all, delete_image, quit))
         add_actions(self.menus.help, (help_default, show_info, show_shortcut))
         add_actions(self.menus.view, (
             self.auto_saving,
@@ -1177,12 +1183,18 @@ class MainWindow(QMainWindow, WindowMixin):
         """
         return '[{} / {}]'.format(self.cur_img_idx + 1, self.img_count)
 
-    def show_bounding_box_from_annotation_file(self, file_path):
+    def show_bounding_box_from_annotation_file(self, file_path, curr_path=None, overwrite=True):
         if self.default_save_dir is not None:
             basename = os.path.basename(os.path.splitext(file_path)[0])
             xml_path = os.path.join(self.default_save_dir, basename + XML_EXT)
             txt_path = os.path.join(self.default_save_dir, basename + TXT_EXT)
             json_path = os.path.join(self.default_save_dir, basename + JSON_EXT)
+
+            if overwrite is False and curr_path is not None:
+                curr_basename = os.path.basename(os.path.splitext(curr_path)[0])
+                curr_txt_path = os.path.join(self.default_save_dir, curr_basename + TXT_EXT)
+            else:
+                curr_txt_path = None
 
             """Annotation file priority:
             PascalXML > YOLO
@@ -1190,7 +1202,7 @@ class MainWindow(QMainWindow, WindowMixin):
             if os.path.isfile(xml_path):
                 self.load_pascal_xml_by_filename(xml_path)
             elif os.path.isfile(txt_path):
-                self.load_yolo_txt_by_filename(txt_path)
+                self.load_yolo_txt_by_filename(txt_path, curr_txt_path, overwrite)
             elif os.path.isfile(json_path):
                 self.load_create_ml_json_by_filename(json_path, file_path)
 
@@ -1202,7 +1214,7 @@ class MainWindow(QMainWindow, WindowMixin):
             if os.path.isfile(xml_path):
                 self.load_pascal_xml_by_filename(xml_path)
             elif os.path.isfile(txt_path):
-                self.load_yolo_txt_by_filename(txt_path)
+                self.load_yolo_txt_by_filename(txt_path, curr_txt_path, overwrite)
             elif os.path.isfile(json_path):
                 self.load_create_ml_json_by_filename(json_path, file_path)
             
@@ -1540,14 +1552,8 @@ class MainWindow(QMainWindow, WindowMixin):
         if not self.dirty:
             return True
         else:
-            discard_changes = self.discard_changes_dialog()
-            if discard_changes == QMessageBox.No:
-                return True
-            elif discard_changes == QMessageBox.Yes:
-                self.save_file()
-                return True
-            else:
-                return False
+            self.save_file()
+            return True
 
     def discard_changes_dialog(self):
         yes, no, cancel = QMessageBox.Yes, QMessageBox.No, QMessageBox.Cancel
@@ -1629,7 +1635,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.load_labels(shapes)
         self.canvas.verified = t_voc_parse_reader.verified
 
-    def load_yolo_txt_by_filename(self, txt_path):
+    def load_yolo_txt_by_filename(self, txt_path, curr_txt_path, overwrite=True):
         if self.file_path is None:
             return
         if os.path.isfile(txt_path) is False:
@@ -1638,7 +1644,21 @@ class MainWindow(QMainWindow, WindowMixin):
         self.set_format(FORMAT_YOLO)
         t_yolo_parse_reader = YoloReader(txt_path, self.image)
         shapes = t_yolo_parse_reader.get_shapes()
-        print(shapes)
+
+        # only copy new labels, do not overwrite old ones
+        if overwrite is False:
+            if os.path.isfile(curr_txt_path) is False:
+                return
+            curr_yolo_parse_reader = YoloReader(curr_txt_path, self.image)
+            existing_shapes = curr_yolo_parse_reader.get_shapes()
+            existing_labels = {s[0] for s in existing_shapes}
+            #prev_labels = [s[0] for s in shapes]
+            new_shapes = [s for s in shapes if s[0] not in existing_labels]
+            for ns in new_shapes:
+                if ns[0] not in self.freezed_classes:
+                    existing_shapes.append(ns)
+            shapes = list(existing_shapes)
+
         self.load_labels(shapes)
         self.canvas.verified = t_yolo_parse_reader.verified
 
@@ -1661,6 +1681,14 @@ class MainWindow(QMainWindow, WindowMixin):
             prev_file_path = self.m_img_list[current_index - 1]
             self.show_bounding_box_from_annotation_file(prev_file_path)
             self.save_file()
+
+    def copy_previous_bounding_boxes_no_overwrite(self):
+            curr_index = self.m_img_list.index(self.file_path)
+            if curr_index - 1 >= 0:
+                prev_file_path = self.m_img_list[curr_index - 1]
+                curr_file_path = self.m_img_list[curr_index]
+                self.show_bounding_box_from_annotation_file(prev_file_path, curr_file_path, False)
+                self.save_file()
 
     def toggle_paint_labels_option(self):
         for shape in self.canvas.shapes:
